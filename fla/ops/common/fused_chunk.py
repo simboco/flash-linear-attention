@@ -53,9 +53,9 @@ def fused_chunk_fwd_kernel(
     BV: tl.constexpr,
     USE_G: tl.constexpr,
     USE_G_GAMMA: tl.constexpr,
-    IS_VARLEN: tl.constexpr,
     USE_INITIAL_STATE: tl.constexpr,
     STORE_FINAL_STATE: tl.constexpr,
+    IS_VARLEN: tl.constexpr,
 ):
     i_v, i_k, i_nh = tl.program_id(0), tl.program_id(1), tl.program_id(2)
     i_n, i_h = i_nh // H, i_nh % H
@@ -81,13 +81,14 @@ def fused_chunk_fwd_kernel(
 
     # [BT, BT]
     m_s = o_i[:, None] >= o_i[None, :]
-    # [BK, BV]
-    b_h = tl.zeros([BK, BV], dtype=tl.float32)
 
     q = q + (bos*H + i_h) * K
     k = k + (bos*H + i_h) * K
     v = v + (bos*H + i_h) * V
     o = o + (i_k * all + bos).to(tl.int64) * H*V + i_h * V
+
+    # [BK, BV]
+    b_h = tl.zeros([BK, BV], dtype=tl.float32)
     if USE_INITIAL_STATE:
         p_h = tl.make_block_ptr(h0 + i_nh * K*V, (K, V), (V, 1), (i_k * BK, i_v * BV), (BK, BV), (1, 0))
         b_h = tl.load(p_h, boundary_check=(0, 1)).to(tl.float32)
