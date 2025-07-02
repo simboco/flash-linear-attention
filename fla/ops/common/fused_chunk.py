@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright (c) 2023-2025, Songlin Yang, Yu Zhang
 
-import warnings
 from typing import Optional, Tuple
 
 import torch
@@ -10,14 +9,7 @@ import triton.language as tl
 
 from fla.ops.utils import chunk_local_cumsum
 from fla.ops.utils.op import exp
-from fla.utils import (
-    autocast_custom_bwd,
-    autocast_custom_fwd,
-    check_shared_mem,
-    input_guard,
-    is_nvidia_hopper,
-    require_version
-)
+from fla.utils import autocast_custom_bwd, autocast_custom_fwd, check_shared_mem, input_guard, is_nvidia_hopper
 
 BKV_LIST = [64, 128] if check_shared_mem() else [32, 64]
 NUM_WARPS = [2, 4] if is_nvidia_hopper else [2, 4, 8]
@@ -26,9 +18,9 @@ NUM_WARPS = [2, 4] if is_nvidia_hopper else [2, 4, 8]
 @triton.heuristics({
     'USE_G': lambda args: args['g'] is not None,
     'USE_G_GAMMA': lambda args: args['g_gamma'] is not None,
-    'IS_VARLEN': lambda args: args['cu_seqlens'] is not None,
     'USE_INITIAL_STATE': lambda args: args['h0'] is not None,
     'STORE_FINAL_STATE': lambda args: args['ht'] is not None,
+    'IS_VARLEN': lambda args: args['cu_seqlens'] is not None,
 })
 @triton.autotune(
     configs=[
@@ -516,10 +508,6 @@ class FusedChunkFunction(torch.autograd.Function):
     @staticmethod
     @input_guard
     @autocast_custom_fwd
-    @require_version(
-        "triton>=2.2.0",
-        "Triton>=2.2.0 is required to circumvent [some compiler bugs](https://github.com/openai/triton/issues/2852)"
-    )
     def forward(
         ctx,
         q,
@@ -587,7 +575,6 @@ def fused_chunk(
     initial_state: Optional[torch.Tensor] = None,
     output_final_state: bool = False,
     cu_seqlens: Optional[torch.LongTensor] = None,
-    head_first: bool = False,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     r"""
     Args:
@@ -616,9 +603,6 @@ def fused_chunk(
         cu_seqlens (torch.LongTensor):
             Cumulative sequence lengths of shape `[N+1]` used for variable-length training,
             consistent with the FlashAttention API.
-        head_first (Optional[bool]):
-            Whether the inputs are in the head-first format. Default: `False`.
-            This argument has been deprecated.
 
     Returns:
         o (torch.Tensor):
@@ -626,20 +610,8 @@ def fused_chunk(
         final_state (torch.Tensor):
             Final state of shape `[N, H, K, V]` if `output_final_state=True` else `None`.
     """
-    if head_first:
-        raise DeprecationWarning(
-            "head_first is deprecated and will be removed in a future version. "
-            "Please use head_first=False for now instead."
-        )
-    if not head_first and q.shape[1] < q.shape[2]:
-        warnings.warn(
-            f"Input tensor shape suggests potential format mismatch: seq_len ({q.shape[1]}) < num_heads ({q.shape[2]}). "
-            "This may indicate the inputs were passed in head-first format [B, H, T, ...] "
-            "when head_first=False was specified. "
-            "Please verify your input tensor format matches the expected shape [B, T, H, ...]."
-        )
     if g is not None and g_gamma is not None:
-        raise ValueError("Only one of g or g_gamma should be provided.")
+        raise ValueError("Only one of `g` or `g_gamma` should be provided.")
     if scale is None:
         scale = k.shape[-1] ** -0.5
     o, final_state = FusedChunkFunction.apply(
