@@ -104,7 +104,7 @@ def token_shift_fwd_kernel_short(
     if is_first_pos:
         # First position in sequence: delta = -hidden_states
         if USE_INITIAL_STATE:
-            # cache shape: [1, B, D] in varlen, [B, 1, D] in non-varlen
+            # cache shape: [N, D]
             if IS_VARLEN:
                 cache_offset = i_n * D + o_d  # i_n is seq index
             else:
@@ -185,7 +185,7 @@ def token_shift_fwd_kernel_long(
         is_first = (global_t == bos)
         if is_first:
             if USE_INITIAL_STATE:
-                # cache shape: [1,B,D] in varlen, [B,1,D] else
+                # cache shape: [N, D]
                 # This should not be used for varlen
                 cache_off = i_n * D + o_d if IS_VARLEN else i_b * D + o_d
                 b_cache = tl.load(cache + cache_off, mask=m_d)
@@ -373,10 +373,7 @@ def token_shift_fwd(
         N = B
 
     if output_cache:
-        if cu_seqlens is not None:
-            raise NotImplementedError("output_cache is not supported for cu_seqlens")
-        else:
-            cache_out = torch.empty((1, N, D), device=x.device, dtype=x.dtype)
+        cache_out = torch.empty((N, D), device=x.device, dtype=x.dtype)
     else:
         cache_out = None
 
@@ -439,9 +436,11 @@ def token_shift_bwd(
     dx = torch.empty_like(dy)
     if has_init_cache:
         if cu_seqlens is not None:
-            grad_cache_out = torch.empty((N, 1, D), device=dy.device, dtype=dy.dtype)
+            # TODO It's not clear how to design and calculate the gradient, need to
+            # think about it later.
+            raise NotImplementedError("Initial cache is not supported for variable length sequences")
         else:
-            grad_cache_out = torch.empty((1, N, D), device=dy.device, dtype=dy.dtype)
+            grad_cache_out = torch.empty((N, D), device=dy.device, dtype=dy.dtype)
     else:
         grad_cache_out = None
     if use_short_kernel:
@@ -516,7 +515,7 @@ def token_shift(
         x: Input tensor of shape [B, T, D] (or [1, T, D] when `cu_seqlens` is supplied).
         cu_seqlens: Optional cumulative sequence lengths of shape [B + 1].
                     When supplied, `x.shape[0]` must be 1 and `x.dim()` must be 3.
-        cache: Optional cache tensor of shape [B, 1, D] that holds the last token
+        cache: Optional cache tensor of shape [N, D] that holds the last token
                from the previous call.
         output_cache: Whether to return the updated cache alongside the output.
                       In previous versions this parameter did not exist and the
@@ -533,9 +532,6 @@ def token_shift(
     if cu_seqlens is not None:
         assert x.dim() == 3, "Input must be [B, T, D]"
         assert x.shape[0] == 1, "Batch size must be 1 when using cu_seqlens"
-        assert cache is None, "Cache must be None when using cu_seqlens"
-        if output_cache:
-            raise ValueError("output_cache cannot be True when cu_seqlens is provided")
 
     output, cache_out = TokenShift.apply(x, cu_seqlens, cache, output_cache)
     if output_cache:
