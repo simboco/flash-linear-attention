@@ -15,7 +15,6 @@ This repo aims at providing a collection of efficient Triton-based implementatio
 * [News](#news)
 * [Models](#models)
 * [Installation](#installation)
-  * [ARM (aarch64) Support for Triton](FAQs.md#4-triton-support-for-arm-aarch64-architecture)
 * [Usage](#usage)
   * [Token Mixing](#token-mixing)
   * [Fused Modules](#fused-modules)
@@ -234,6 +233,12 @@ We offer a collection of fused modules in `fla.modules` to facilitate faster tra
 * [`Cross Entropy`](fla/modules/fused_cross_entropy.py): faster Triton implementation of cross entropy loss.
 * [`Linear Cross Entropy`](fla/modules/fused_linear_cross_entropy.py): fused linear layer and cross entropy loss to avoid the materialization of large logits tensors. Also refer to implementations by [mgmalek](https://github.com/mgmalek/efficient_cross_entropy) and [Liger-Kernel](https://github.com/linkedin/Liger-Kernel/blob/main/src/liger_kernel/ops/fused_linear_cross_entropy.py).
 * [`Linear KL Divergence`](fla/modules/fused_kl_div.py): fused linear layer and KL divergence loss in a similar vein as CE loss.
+
+> [!IMPORTANT]
+> You can control using `fuse_linear_cross_entropy` in the model configuration to enable/disable the fused linear cross entropy loss.
+>
+> This fused implementation is more memory-efficient but may reduce numerical precision. Due to this trade-off, it is disabled by default.
+> If you enable this feature and encounter training instability (e.g., loss divergence), we recommend disabling it to see if the issue is resolved.
 
 ### Generation
 
