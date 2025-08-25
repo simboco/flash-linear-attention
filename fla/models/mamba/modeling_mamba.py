@@ -20,6 +20,7 @@ import torch
 from torch import nn
 from transformers.configuration_utils import PretrainedConfig
 from transformers.generation import GenerationMixin
+from transformers.modeling_layers import GradientCheckpointingLayer
 from transformers.modeling_utils import PreTrainedModel
 from transformers.utils import ModelOutput, logging
 from transformers.utils.deprecation import deprecate_kwarg
@@ -140,7 +141,8 @@ class MambaCache:
         self.ssm_states.zero_()
 
 
-class MambaBlock(nn.Module):
+class MambaBlock(GradientCheckpointingLayer):
+
     def __init__(self, config, layer_idx):
         super().__init__()
         self.config = config
@@ -345,9 +347,6 @@ class MambaModel(MambaPreTrainedModel):
         if inputs_embeds is None:
             inputs_embeds = self.embeddings(input_ids)
 
-        if self.gradient_checkpointing and self.training and use_cache:
-            use_cache = False
-
         if use_cache:
             if cache_params is None:
                 cache_params = MambaCache(
@@ -369,17 +368,12 @@ class MambaModel(MambaPreTrainedModel):
         hidden_states = inputs_embeds
         all_hidden_states = () if output_hidden_states else None
         for mixer_block in self.layers:
-            if self.gradient_checkpointing and self.training:
-                hidden_states = self._gradient_checkpointing_func(
-                    mixer_block.__call__, hidden_states, cache_params, cache_position, attention_mask
-                )
-            else:
-                hidden_states = mixer_block(
-                    hidden_states,
-                    cache_params=cache_params,
-                    cache_position=cache_position,
-                    attention_mask=attention_mask,
-                )
+            hidden_states = mixer_block(
+                hidden_states,
+                cache_params=cache_params,
+                cache_position=cache_position,
+                attention_mask=attention_mask,
+            )
 
             if output_hidden_states:
                 all_hidden_states = all_hidden_states + (hidden_states,)
