@@ -19,7 +19,6 @@ from typing import Optional, Tuple, Union
 import torch
 from torch import nn
 from transformers.generation import GenerationMixin
-from transformers.modeling_layers import GradientCheckpointingLayer
 from transformers.modeling_utils import PreTrainedModel
 from transformers.utils import ModelOutput, logging
 from transformers.utils.deprecation import deprecate_kwarg
@@ -33,6 +32,12 @@ try:
     from torch.distributed.tensor import DTensor
 except (ImportError, AttributeError):
     DTensor = None
+
+try:
+    from transformers.modeling_layers import GradientCheckpointingLayer
+except ImportError:
+    from fla.models.modeling_layers import GradientCheckpointingLayer
+
 
 logger = logging.get_logger(__name__)
 
