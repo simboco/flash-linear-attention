@@ -6,21 +6,40 @@ from fla.ops.utils import prepare_chunk_indices, prepare_chunk_offsets
 
 
 @triton.heuristics({
-    'IS_VARLEN': lambda args: args['cu_seqlens'] is not None,
     'USE_GATE': lambda args: args['g_cumsum'] is not None,
+    'IS_VARLEN': lambda args: args['cu_seqlens'] is not None,
 })
 @triton.jit(do_not_specialize=['T'])
 def parallel_path_bwd_dkv_kernel(
-    q, k, v, g_cumsum,
-    hc_whole, scale, L, D,
-    dk, dv, do, dg_cumsum,
-    cu_seqlens, indices, split_offsets,
+    q,
+    k,
+    v,
+    g_cumsum,
+    hc_whole,
+    scale,
+    L,
+    D,
+    dk,
+    dv,
+    do,
+    dg_cumsum,
+    cu_seqlens,
+    indices,
+    split_offsets,
     T,
-    G: tl.constexpr, HQ: tl.constexpr, H: tl.constexpr,
-    K: tl.constexpr, V: tl.constexpr,
-    BT: tl.constexpr, BS: tl.constexpr, BK: tl.constexpr,
-    BV: tl.constexpr, S: tl.constexpr,
-    IS_VARLEN: tl.constexpr, USE_GATE: tl.constexpr, NUM_BLOCKS: tl.constexpr
+    G: tl.constexpr,
+    HQ: tl.constexpr,
+    H: tl.constexpr,
+    K: tl.constexpr,
+    V: tl.constexpr,
+    BT: tl.constexpr,
+    BS: tl.constexpr,
+    BK: tl.constexpr,
+    BV: tl.constexpr,
+    S: tl.constexpr,
+    IS_VARLEN: tl.constexpr,
+    USE_GATE: tl.constexpr,
+    NUM_BLOCKS: tl.constexpr
 ):
     i_t, i_bh = tl.program_id(0), tl.program_id(1)
     i_b, i_hq = i_bh // HQ, i_bh % HQ
@@ -35,7 +54,6 @@ def parallel_path_bwd_dkv_kernel(
         i_n = i_b
         bos, eos = i_n * T, i_n * T + T
         boh_large = i_n * tl.cdiv(T, S)
-
 
     # offset calculations
 
@@ -139,13 +157,32 @@ def parallel_path_bwd_dkv_fn(
     dk = torch.empty(B, T, HQ, K, dtype=torch.float32, device=q.device)
 
     parallel_path_bwd_dkv_kernel[(NT, B*HQ)](
-        q=q, k=k, v=v, g_cumsum=g_cumsum,
-        hc_whole=hc_whole, scale=scale, L=L, D=D,
-        dk=dk, dv=dv, do=do, dg_cumsum=dg_cumsum,
-        cu_seqlens=cu_seqlens, indices=indices, split_offsets=split_offsets,
-        T=T, S=S, BT=BT, BS=BS,
-        G=G, HQ=HQ, H=H, K=K, V=V,
-        BK=triton.next_power_of_2(K), BV=triton.next_power_of_2(V),
+        q=q,
+        k=k,
+        v=v,
+        g_cumsum=g_cumsum,
+        hc_whole=hc_whole,
+        scale=scale,
+        L=L,
+        D=D,
+        dk=dk,
+        dv=dv,
+        do=do,
+        dg_cumsum=dg_cumsum,
+        cu_seqlens=cu_seqlens,
+        indices=indices,
+        split_offsets=split_offsets,
+        T=T,
+        S=S,
+        BT=BT,
+        BS=BS,
+        G=G,
+        HQ=HQ,
+        H=H,
+        K=K,
+        V=V,
+        BK=triton.next_power_of_2(K),
+        BV=triton.next_power_of_2(V),
         num_warps=8 if (BT == 128 and K == 128) else 4,
         NUM_BLOCKS=num_blocks
     )
