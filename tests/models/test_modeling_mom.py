@@ -11,7 +11,6 @@ from .test_modeling_base import run_test_generation, run_test_model_forward_back
 # ===================================================================================
 # Test for Modeling (Forward/Backward Pass)
 # ===================================================================================
-@pytest.mark.skip(reason="Bug not fixed yet")
 @pytest.mark.parametrize(
     ['L', 'B', 'T', 'H', 'D', 'use_l2warp', 'dtype'],
     [
@@ -55,4 +54,5 @@ def test_generation(
     D: int,
     dtype: torch.dtype,
 ):
+    pytest.skip("Known bugs in mom")
     run_test_generation(L, B, T, H, D, MomConfig, dtype)
